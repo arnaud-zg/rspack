@@ -14,6 +14,15 @@ class RelocateGlobRootPlugin {
           (resolveData) => {
             if (
               resolveData !== false &&
+              resolveData.request.includes('?shared-directory-prefix')
+            ) {
+              expect(resolveData.resource).toBe(
+                path.join(import.meta.dirname, 'src/glob-imports'),
+              );
+              expect(resolveData.recursive).toBe(false);
+            }
+            if (
+              resolveData !== false &&
               resolveData.request.includes('@relocated')
             ) {
               resolveData.resource = path.join(
