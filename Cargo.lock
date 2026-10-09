@@ -4486,7 +4486,12 @@ dependencies = [
 name = "rspack_glob"
 version = "0.103.0"
 dependencies = [
+ "async-recursion",
  "cow-utils",
+ "rspack_error",
+ "rspack_fs",
+ "rspack_paths",
+ "rspack_util",
  "rustc-hash",
  "smallvec",
 ]
@@ -4496,10 +4501,10 @@ name = "rspack_glob_test"
 version = "0.103.0"
 dependencies = [
  "async-trait",
- "rspack_core",
  "rspack_fs",
  "rspack_glob",
  "rspack_paths",
+ "smallvec",
  "tokio",
 ]
 
