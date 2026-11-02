@@ -24,6 +24,11 @@ export default defineConfig({
       {
         test: /\.css$/,
         type: 'css',
+        // Keep the native parser out of this case so the assertions observe
+        // only the loader's custom-media behavior.
+        parser: {
+          customMedia: false,
+        },
         oneOf: [
           {
             test: /deep\.css$/,
