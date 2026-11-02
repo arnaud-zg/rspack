@@ -217,7 +217,7 @@ impl IgnoredMatcher {
       // form whose path keeps the platform separators.
       IgnoredMatcher::Function(f) => f(path.to_owned()).await,
       IgnoredMatcher::Mixed { globs, regexes } => {
-        let normalized = normalize_path(path);
+        let normalized = normalize_path_separators(path);
         globs.as_ref().is_some_and(|re| re.is_match(&normalized))
           || regexes.iter().any(|re| re.test(&normalized))
       }
