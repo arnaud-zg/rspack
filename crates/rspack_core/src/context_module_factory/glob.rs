@@ -120,22 +120,19 @@ pub(super) fn compile_aliased_glob_request(
   case_sensitive: bool,
 ) -> Option<(CompiledContextModuleGlobRequest, ContextGlobScan)> {
   let mut resolved_patterns = Vec::new();
-  for raw in patterns {
+  for (index, raw) in patterns.iter().enumerate() {
     let mut resolved = resolve_context_module_glob_pattern(raw, context, compiler_context);
-    if let Some(alias) = aliases.iter().find(|alias| alias.pattern == *raw) {
+    if let Some((_, prefix_len, resource)) = aliases
+      .iter()
+      .find(|(pattern_index, _, _)| *pattern_index == index)
+    {
       let source = parse_context_module_glob_pattern(raw);
-      let suffix = source
-        .pattern_base
-        .strip_prefix(&alias.prefix)
-        .unwrap_or("");
+      let prefix = source.pattern.get(..*prefix_len)?;
+      let suffix = source.pattern_base.strip_prefix(prefix).unwrap_or("");
       resolved.absolute_base = if case_sensitive {
-        alias
-          .resource
-          .node_join(suffix)
-          .node_normalize()
-          .to_string()
+        resource.path.node_join(suffix).node_normalize().to_string()
       } else {
-        alias.resource.to_string()
+        resource.path.to_string()
       };
     } else if !case_sensitive && !resolved.negative {
       resolved.absolute_base = case_insensitive_context_module_glob_base(
@@ -151,11 +148,15 @@ pub(super) fn compile_aliased_glob_request(
   let recursive = glob_patterns_are_recursive(&resolved_patterns, &root)
     || (!case_sensitive
       && aliases.iter().any(|alias| {
-        !alias.pattern.starts_with('!')
-          && parse_context_module_glob_pattern(&alias.pattern)
-            .pattern_base
-            .strip_prefix(&alias.prefix)
-            .is_some_and(|suffix| !suffix.is_empty())
+        patterns.get(alias.0).is_some_and(|pattern| {
+          let source = parse_context_module_glob_pattern(pattern);
+          !source.negative
+            && source
+              .pattern
+              .get(..alias.1)
+              .and_then(|prefix| source.pattern_base.strip_prefix(prefix))
+              .is_some_and(|suffix| !suffix.is_empty())
+        })
       }));
   let mut scan_request = context_relative_glob_request(root.as_str(), context, false);
   if let Some(parsed) = parse_resource(request) {
@@ -372,7 +373,8 @@ impl<'a> ContextModuleGlobMatcher<'a> {
       .glob_patterns()?
       .iter()
       .zip(sources)
-      .filter_map(|(raw, source)| {
+      .enumerate()
+      .filter_map(|(index, (_, source))| {
         let mut matcher = GlobPattern::new_with_options(
           source.pattern.as_bytes(),
           GlobOptions {
@@ -387,21 +389,19 @@ impl<'a> ContextModuleGlobMatcher<'a> {
           scan
             .aliases
             .iter()
-            .find(|alias| alias.pattern == *raw)
+            .find(|(pattern_index, _, _)| *pattern_index == index)
             .map(|alias| (scan, alias))
         });
-        let (alias_root, absolute_base) = if let Some((scan, alias)) = alias {
-          matcher = matcher.match_prefix(&alias.prefix)?;
+        let (alias_root, absolute_base) = if let Some((scan, (_, prefix_len, resource))) = alias {
+          let prefix = source.pattern.get(..*prefix_len)?;
+          matcher = matcher.match_prefix(prefix)?;
           // Relocation applies to the physical tree, never to the glob syntax.
-          let offset = alias.resource.as_std_path().relative(&scan.root);
+          let offset = resource.path.as_std_path().relative(&scan.root);
           let root = options
             .resource
             .node_join(offset.to_string_lossy().as_ref())
             .node_normalize();
-          let suffix = source
-            .pattern_base
-            .strip_prefix(&alias.prefix)
-            .unwrap_or("");
+          let suffix = source.pattern_base.strip_prefix(prefix).unwrap_or("");
           let base = normalize_case_insensitive_path(root.node_join(suffix).as_str());
           (Some(root), base)
         } else {
@@ -422,16 +422,16 @@ impl<'a> ContextModuleGlobMatcher<'a> {
           }),
           alias: alias_root,
           query: alias
-            .filter(|(_, alias)| !alias.query.is_empty())
+            .filter(|(_, (_, _, resource))| !resource.query.is_empty())
             .map_or_else(
               || options.resource_query.clone(),
-              |(_, alias)| alias.query.clone(),
+              |(_, (_, _, resource))| resource.query.clone(),
             ),
           fragment: alias
-            .filter(|(_, alias)| !alias.fragment.is_empty())
+            .filter(|(_, (_, _, resource))| !resource.fragment.is_empty())
             .map_or_else(
               || options.resource_fragment.clone(),
-              |(_, alias)| alias.fragment.clone(),
+              |(_, (_, _, resource))| resource.fragment.clone(),
             ),
           absolute_base,
         })
