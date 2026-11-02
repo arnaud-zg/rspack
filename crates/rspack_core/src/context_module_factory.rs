@@ -578,16 +578,13 @@ impl ContextModuleFactory {
           .or_insert(resource)
       };
       if let Some(resource) = resource {
-        aliases.push((
-          retained.len(),
-          alias.prefix.len(),
-          Resource {
-            path: resource.path.clone(),
-            query: resource.query.clone(),
-            fragment: resource.fragment.clone(),
-            description_data: None,
-          },
-        ));
+        aliases.push(ContextGlobAlias {
+          pattern: pattern.clone(),
+          prefix: alias.prefix,
+          resource: resource.path.clone(),
+          query: resource.query.clone(),
+          fragment: resource.fragment.clone(),
+        });
         retained.push(pattern.clone());
       }
     }

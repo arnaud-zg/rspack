@@ -34,7 +34,7 @@ use crate::{
   FreezeLock, GroupOptions, ImportAttributes, ImportPhase, LibIdentOptions, Module, ModuleArgument,
   ModuleCodeGenerationContext, ModuleCodeTemplate, ModuleGraph, ModuleId, ModuleIdsArtifact,
   ModuleLayer, ModuleType, NeedBuildContext, RealDependencyLocation, ReferencedSpecifier, Resolve,
-  Resource, RuntimeGlobals, RuntimeGlobalsRenderMode, RuntimeSpec, SourceType, contextify,
+  RuntimeGlobals, RuntimeGlobalsRenderMode, RuntimeSpec, SourceType, contextify,
   get_exports_type_with_strict, get_outgoing_async_modules, impl_module_meta_info,
   module_update_hash,
   new_cache::{FileSystemInfo, Snapshot, SnapshotValidationResult},
@@ -164,8 +164,18 @@ impl From<Option<RspackRegex>> for ContextModulePattern {
   }
 }
 
-/// Pattern index, normalized prefix byte length and resolved physical resource.
-pub type ContextGlobAlias = (usize, usize, Resource);
+/// Alias resolution retained per raw glob, including its resource suffix.
+/// Context options clone these small values for factory hooks and module creation.
+#[cacheable]
+#[derive(Debug, Clone)]
+pub struct ContextGlobAlias {
+  pub pattern: String,
+  pub prefix: String,
+  #[cacheable(with=AsPreset)]
+  pub resource: Utf8PathBuf,
+  pub query: String,
+  pub fragment: String,
+}
 
 /// Physical scan coordinates before hooks relocate the directory. Cloning copies
 /// the alias metadata with the context options; compiled programs stay ephemeral.
@@ -174,6 +184,7 @@ pub type ContextGlobAlias = (usize, usize, Resource);
 pub struct ContextGlobScan {
   #[cacheable(with=AsPreset)]
   pub root: Utf8PathBuf,
+  #[cacheable(with=AsVec<AsCacheable>)]
   pub aliases: Vec<ContextGlobAlias>,
 }
 
