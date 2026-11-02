@@ -23,7 +23,7 @@ use crate::{
   DependencyType, ModuleExt, ModuleFactory, ModuleFactoryCreateData, ModuleFactoryResult,
   OverrideStrict, ResolveArgs, ResolveContextModuleDependencies, ResolveInnerOptions,
   ResolveOptionsWithDependencyType, ResolveResult, Resolver, ResolverFactory, Resource,
-  SharedPluginDriver, resolve_with_resolver,
+  SharedPluginDriver, resolve_error,
 };
 
 mod glob;
@@ -357,7 +357,16 @@ impl ContextModuleFactory {
     {
       (Ok(ResolveResult::Ignored), Default::default())
     } else {
-      resolve_with_resolver(resolve_args, plugin_driver, &resolver).await
+      let (result, dependencies) = resolver
+        .resolve_with_context(resolve_args.context.as_ref(), resolve_args.specifier)
+        .await;
+      let result = match result {
+        Ok(result) => Ok(result),
+        Err(error) => {
+          Err(resolve_error(resolve_args, plugin_driver, resolver.inner_fs(), error).await)
+        }
+      };
+      (result, dependencies)
     };
     let file_dependencies = resolve_dependencies.file_dependencies;
     let missing_dependencies = resolve_dependencies.missing_dependencies;
@@ -544,8 +553,16 @@ impl ContextModuleFactory {
           resolve_to_context: true,
           optional: dependency.get_optional(),
         };
-        let (resource, dependencies) =
-          resolve_with_resolver(args, &self.plugin_driver, resolver).await;
+        let (resource, dependencies) = resolver
+          .resolve_with_context(args.context.as_ref(), args.specifier)
+          .await;
+        let (resource, dependencies) = match resource {
+          Ok(resource) => (Ok(resource), dependencies),
+          Err(error) => (
+            Err(resolve_error(args, &self.plugin_driver, resolver.inner_fs(), error).await),
+            dependencies,
+          ),
+        };
         data
           .file_dependencies
           .extend(dependencies.file_dependencies);
